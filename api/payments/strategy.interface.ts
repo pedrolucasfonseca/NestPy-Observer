@@ -8,12 +8,12 @@ export class PixPayment implements PaymentStrategy {
         if (amount > 1500) {
             return {
                 success: false,
-                message: `Pix rejected: Amount of $${amount.toFixed(2)} exceeds the limit`
+                message: `Pix rejected: Amount of R$${amount.toFixed(2)} exceeds the limit`
             };
         }
         return {
             success: true,
-            message: `Pix payment of $${amount.toFixed(2)} processed instantly.`
+            message: `Pix payment of R$${amount.toFixed(2)} processed instantly.`
         };
     }
 }
@@ -24,12 +24,12 @@ export class CreditPayment implements PaymentStrategy {
         if (amount > 5000) {
             return {
                 success: false,
-                message: `Card declined: Amount of $${amount.toFixed(2)} exceeds the limit`
+                message: `Card declined: Amount of R$${amount.toFixed(2)} exceeds the limit`
             };
         }
         return {
             success: true,
-            message: `Credit card approved for the amount of $${amount.toFixed(2)}`
+            message: `Credit card approved for the amount of R$${amount.toFixed(2)}`
         };
     }
 }
