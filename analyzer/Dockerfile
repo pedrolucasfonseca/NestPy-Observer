@@ -1,16 +1,4 @@
-# Stage 1
-FROM node:22-alpine AS builder 
+FROM python:3.13-slim
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
-
-# Stage 2
-FROM node:22-alpine AS runner
-WORKDIR /app
-COPY --from=builder /app/dist ./dist
-COPY package*.json ./
-RUN npm ci --omit=dev
-EXPOSE 3000
-CMD ["npm", "run", "start:prod"]
+COPY main.py .
+CMD ["python", "-u", "main.py"]

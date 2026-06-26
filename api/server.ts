@@ -1,10 +1,19 @@
 import express from 'express';
 import fs from 'fs';
-import path from 'path';
+import rateLimit from 'express-rate-limit';
 import { PaymentsFactory } from './payments/payments.factory.js';
+import { pool, initDb } from './db.js';
 
 const app = express();
 app.use(express.json()); // allows the API to parse json requests
+
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 100,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+});
+app.use(limiter);
 
 // help function to write logs as json lines
 const writeLog = (level: 'INFO' | 'WARN' | 'ERROR', message: string) => {
@@ -17,11 +26,11 @@ const writeLog = (level: 'INFO' | 'WARN' | 'ERROR', message: string) => {
     const logLine = JSON.stringify(logEntry) + '\n';
 
     // Append to app.log
-    fs.appendFileSync('/app/app.log', logLine);
+    fs.appendFileSync('/app/logs/app.log', logLine);
 };
 
 // POST route to process payments
-app.post('/payments', (req, res) => {
+app.post('/payments', async (req, res) => {
     const { type, amount } = req.body;
     if (!type || !amount) {
         writeLog('WARN', 'Request attempted with missing fields');
@@ -33,6 +42,12 @@ app.post('/payments', (req, res) => {
 
         // strategy processes the payment
         const result = strategy.process(Number(amount));
+
+        // persist the transaction result in the database
+        await pool.query(
+            'INSERT INTO transactions (type, amount, status, message) VALUES ($1, $2, $3, $4)',
+            [type, amount, result.success ? 'approved' : 'rejected', result.message]
+        );
 
         if (result.success) {
             writeLog('INFO', `Success: ${result.message}`);
@@ -48,12 +63,26 @@ app.post('/payments', (req, res) => {
     }
 });
 
+// GET /payments to return full transaction history, newest first
+app.get('/payments', async (_req, res) => {
+    const result = await pool.query('SELECT * FROM transactions ORDER BY created_at DESC');
+    return res.json(result.rows);
+})
+
+// GET /payments/:id to return a single transaction by id
+app.get('/payments/:id', async (req, res) => {
+    const result = await pool.query('SELECT * FROM transactions WHERE id = $1', [req.params['id']]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Transaction not found.' });
+    return res.json(result.rows[0]);
+});
+
 // Health check route
 app.get('/status', (_req, res) => {
     return res.json({ status: 'API is running.' });
 });
 
 const PORT = process.env.PORT || 3000;
+await initDb();
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });

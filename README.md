@@ -1,49 +1,52 @@
 # NestPy-Observer
 
-Ecossistema de **telemetria e observabilidade** simulando um ambiente real de produção. Uma API processa pagamentos e grava logs estruturados em um volume compartilhado; um script Python consome esses logs em tempo real e exibe um dashboard de métricas no terminal.
+A **telemetry and observability** ecosystem simulating a real production environment. An API processes payments and writes structured logs to a shared volume; a Python script consumes those logs in real time and displays a metrics dashboard in the terminal.
 
-## Arquitetura
+## Architecture
 
 ```mermaid
 graph LR
     Client(["Client"])
-    
+
     subgraph Docker Compose
         API["API\nExpress + TypeScript\n:3000"]
+        DB[("PostgreSQL\ntransactions")]
         Volume[("logs_volume\n/app/logs/app.log")]
-        Analyzer["Analyzer\nPython\ndashboard no terminal"]
+        Analyzer["Analyzer\nPython\nterminal dashboard"]
     end
 
-    Client -->|"POST /payments\nGET /status"| API
-    API -->|"grava logs JSON"| Volume
-    Volume -->|"lê em tempo real"| Analyzer
+    Client -->|"POST /payments\nGET /payments\nGET /status"| API
+    API -->|"persists transactions"| DB
+    API -->|"writes JSON logs"| Volume
+    Volume -->|"reads in real time"| Analyzer
 ```
 
-Os dois containers nunca se comunicam via HTTP — o único canal é o arquivo de log em disco, gerenciado pelo Docker como um volume nomeado.
+The API and Analyzer never communicate via HTTP — the only channel between them is a log file on disk, managed by Docker as a named volume.
 
-## Tecnologias
+## Tech Stack
 
-| Camada | Tecnologia |
+| Layer | Technology |
 |---|---|
 | API | Express.js + TypeScript (ES Modules) |
-| Analisador | Python 3.13 |
-| Infraestrutura | Docker + Docker Compose (multi-stage build) |
+| Database | PostgreSQL 17 |
+| Analyzer | Python 3.13 |
+| Infrastructure | Docker + Docker Compose (multi-stage build) |
 
-## Padrões de Projeto
+## Design Patterns
 
-- **Strategy Pattern:** `PixPayment` e `CreditPayment` implementam a mesma interface `PaymentStrategy`, permitindo trocar o comportamento do pagamento sem alterar o código do servidor
-- **Factory Pattern:** `PaymentsFactory` instancia a estratégia correta dinamicamente com base no tipo recebido na requisição
-- **Estruturas de Dados:** o analisador usa `deque` (fila FIFO) para enfileirar logs e dicionário (hash table) para atualizar contadores em O(1)
+- **Strategy Pattern:** `PixPayment` and `CreditPayment` implement the same `PaymentStrategy` interface, allowing payment behavior to be swapped without changing the server code
+- **Factory Pattern:** `PaymentsFactory` dynamically instantiates the correct strategy based on the request body
+- **Data Structures:** the analyzer uses a `deque` (FIFO queue) to enqueue logs and a dictionary (hash table) to update counters in O(1)
 
-## Como Rodar
+## Getting Started
 
-**Pré-requisito:** Docker e Docker Compose instalados.
+**Prerequisites:** Docker and Docker Compose installed. Copy `.env.example` to `.env` and fill in your credentials.
 
 ```bash
 docker compose up --build
 ```
 
-A API sobe na porta `3000`. O analisador começa a monitorar os logs automaticamente.
+The API starts on port `3000`. The analyzer begins watching the log file automatically.
 
 ## Endpoints
 
@@ -55,7 +58,19 @@ curl -X POST http://localhost:3000/payments \
   -d '{"type": "pix", "amount": 500}'
 ```
 
-Tipos suportados: `pix` (limite R$1500) · `card` (limite R$5000)
+Supported types: `pix` (limit R$1500) · `card` (limit R$5000)
+
+### `GET /payments`
+
+```bash
+curl http://localhost:3000/payments
+```
+
+### `GET /payments/:id`
+
+```bash
+curl http://localhost:3000/payments/1
+```
 
 ### `GET /status`
 
@@ -63,21 +78,23 @@ Tipos suportados: `pix` (limite R$1500) · `card` (limite R$5000)
 curl http://localhost:3000/status
 ```
 
-## Estrutura do Projeto
+## Project Structure
 
 ```
 NestPy-Observer/
 ├── api/
 │   ├── payments/
-│   │   ├── strategy.interface.ts # interface + estratégias Pix e Cartão
-│   │   └── payments.factory.ts # factory que instancia a estratégia
-│   ├── server.ts # servidor Express + sistema de logs
-│   ├── Dockerfile # multi-stage build (builder/runner)
+│   │   ├── strategy.interface.ts # PaymentStrategy interface + Pix and Card implementations
+│   │   └── payments.factory.ts # factory that instantiates the correct strategy
+│   ├── server.ts # Express server + log system + routes
+│   ├── db.ts # PostgreSQL connection pool + table initialization
+│   ├── Dockerfile # multi-stage build (builder -> runner)
 │   ├── .dockerignore
 │   ├── package.json
 │   └── tsconfig.json
 ├── analyzer/
-│   ├── main.py # analisador em tempo real + dashboard
+│   ├── main.py # real-time log analyzer + terminal dashboard
 │   └── Dockerfile
-└── docker-compose.yml # orquestração + volume compartilhado
+├── .env.example # environment variable template (no secrets)
+└── docker-compose.yml # orchestration + shared volume + postgres
 ```
