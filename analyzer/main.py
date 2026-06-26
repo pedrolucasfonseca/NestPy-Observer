@@ -3,7 +3,7 @@ import time
 import os
 from collections import deque
 
-LOG_PATH = os.path.abspath("../api/app.log")
+LOG_PATH = "/app/logs/app.log"
 
 # deque allows fast appends to the end and pops from the front
 logs_queue = deque()

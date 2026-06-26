@@ -17,7 +17,7 @@ const writeLog = (level: 'INFO' | 'WARN' | 'ERROR', message: string) => {
     const logLine = JSON.stringify(logEntry) + '\n';
 
     // Append to app.log
-    fs.appendFileSync(path.resolve('app.log'), logLine);
+    fs.appendFileSync('/app/app.log', logLine);
 };
 
 // POST route to process payments

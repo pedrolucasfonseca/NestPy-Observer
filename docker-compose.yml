@@ -1,0 +1,17 @@
+services:
+  api:
+    build: ./api
+    ports:
+      - "3000:3000"
+    volumes:
+      - logs_volume:/app/logs
+
+  analyzer:
+    build: ./analyzer
+    volumes:
+      - logs_volume:/app/logs
+    depends_on:
+      - api
+
+volumes:
+  logs_volume:
