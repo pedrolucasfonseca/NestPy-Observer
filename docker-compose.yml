@@ -4,14 +4,34 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - logs_volume:/app/logs
+      - logs_volume:/app/logs # shared volume where logs are written
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
 
   analyzer:
     build: ./analyzer
     volumes:
-      - logs_volume:/app/logs
+      - logs_volume:/app/logs # same shared volume, it reads what the api writes
     depends_on:
       - api
 
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - db_volume:/var/lib/postgresql/data # data persists between container restarts
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
 volumes:
   logs_volume:
+  db_volume:
