@@ -1,10 +1,19 @@
 import express from 'express';
 import fs from 'fs';
+import rateLimit from 'express-rate-limit';
 import { PaymentsFactory } from './payments/payments.factory.js';
 import { pool, initDb } from './db.js';
 
 const app = express();
 app.use(express.json()); // allows the API to parse json requests
+
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 100,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+});
+app.use(limiter);
 
 // help function to write logs as json lines
 const writeLog = (level: 'INFO' | 'WARN' | 'ERROR', message: string) => {
