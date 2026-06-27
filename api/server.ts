@@ -2,6 +2,7 @@ import express from 'express';
 import fs from 'fs';
 import rateLimit from 'express-rate-limit';
 import { PaymentsFactory } from './payments/payments.factory.js';
+import client from 'prom-client';
 import { pool, initDb } from './db.js';
 
 const app = express();
@@ -14,6 +15,24 @@ const limiter = rateLimit({
     legacyHeaders: false,
 });
 app.use(limiter);
+
+// collects default Node.js metrics: memory, CPU, garbage collection, etc.
+client.collectDefaultMetrics();
+
+// counts total payments by type (pix/card) and status (approved/rejected)
+const paymentsCounter = new client.Counter({
+    name: 'payments_total',
+    help: 'Total number of payments processsed',
+    labelNames: ['type', 'status']
+});
+
+// tracks the distribution of payment amounts across buckets (in BRL)
+const paymentsAmountHistogram = new client.Histogram({
+    name: 'payments_amount',
+    help: 'Distribution of payments amounts',
+    labelNames: ['type'],
+    buckets: [100, 500, 1000, 2000, 5000, 10000]
+});
 
 // help function to write logs as json lines
 const writeLog = (level: 'INFO' | 'WARN' | 'ERROR', message: string) => {
@@ -49,6 +68,10 @@ app.post('/payments', async (req, res) => {
             [type, amount, result.success ? 'approved' : 'rejected', result.message]
         );
 
+        // increment metrics
+        paymentsCounter.inc({ type, status: result.success ? 'approved' : 'rejected' });
+        paymentsAmountHistogram.observe({ type }, Number(amount));
+
         if (result.success) {
             writeLog('INFO', `Success: ${result.message}`);
             return res.status(200).json(result);
@@ -74,6 +97,12 @@ app.get('/payments/:id', async (req, res) => {
     const result = await pool.query('SELECT * FROM transactions WHERE id = $1', [req.params['id']]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Transaction not found.' });
     return res.json(result.rows[0]);
+});
+
+// exposes metrics in Prometheus format for scraping
+app.get('/metrics', async (_req, res) => {
+    res.set('Content-Type', client.register.contentType);
+    res.send(await client.register.metrics());
 });
 
 // Health check route
