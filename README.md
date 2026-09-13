@@ -98,6 +98,8 @@ Exposes metrics in Prometheus format for scraping.
 curl http://localhost:3000/metrics
 ```
 
+> **Note:** this endpoint is unauthenticated by design, it is intended for scraping within a private Docker network. Do not expose it publicly in a production environment without an IP allowlist or authentication middleware.
+
 ## Project Structure
 
 ```
