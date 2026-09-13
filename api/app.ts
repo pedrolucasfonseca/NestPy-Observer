@@ -37,26 +37,31 @@ const paymentsAmountHistogram = new client.Histogram({
 // POST route to process payments
 app.post('/payments', async (req, res) => {
     const { type, amount } = req.body;
+    const parsedAmount = Number(amount);
     if (!type || !amount) {
         writeLog('WARN', 'Request attempted with missing fields');
         return res.status(400).json({ error: '"type" and "amount" fields are required.' });
+    }
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        writeLog('WARN', 'Request attempted with invalid amount');
+        return res.status(400).json({ error: '"amount" must be a positive number.' });
     }
 
     try { // factory creates the correct strategy
         const strategy = PaymentsFactory.createStrategy(type);
 
         // strategy processes the payment
-        const result = strategy.process(Number(amount));
+        const result = strategy.process(parsedAmount);
 
         // persist the transaction result in the database
         await pool.query(
             'INSERT INTO transactions (type, amount, status, message) VALUES ($1, $2, $3, $4)',
-            [type, amount, result.success ? 'approved' : 'rejected', result.message]
+            [type, parsedAmount, result.success ? 'approved' : 'rejected', result.message]
         );
 
         // increment metrics
         paymentsCounter.inc({ type, status: result.success ? 'approved' : 'rejected' });
-        paymentsAmountHistogram.observe({ type }, Number(amount));
+        paymentsAmountHistogram.observe({ type }, parsedAmount);
 
         if (result.success) {
             writeLog('INFO', `Success: ${result.message}`);
